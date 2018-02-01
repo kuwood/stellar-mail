@@ -1,0 +1,19 @@
+{
+  "name": "stellar-mail",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon server/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "ku",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.18.2",
+    "dotenv": "^5.0.0",
+    "express": "^4.16.2",
+    "mailgun-js": "^0.14.2",
+    "stellar-sdk": "^0.8.0"
+  }
+}
