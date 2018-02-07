@@ -1,4 +1,5 @@
 require('dotenv').config();
+const {promisify} = require('util');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -20,7 +21,6 @@ app.use(require('morgan')('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-
 if(isProduction){
   mongoose.connect(process.env.MONGODB_URI);
 } else {
@@ -28,7 +28,9 @@ if(isProduction){
   mongoose.set('xdebug', true);
 }
 
+// register models with app
 require('./models/User');
+const User = mongoose.model("User");
 require('./models/EmailVerification');
 require('./config/passport');
 
@@ -38,47 +40,37 @@ app.get('/ping', function (req, res) {
   return res.send('pong');
 });
 
-const horizon = new StellarSdk.Server('https://horizon-testnet.stellar.org');
+const stellarUrl = isProduction ? 'https://horizon.stellar.org' : 'https://horizon-testnet.stellar.org';
+const horizon = new StellarSdk.Server(stellarUrl);
 
+const sendMail = require("./services/sendMail");
 const mailJob = horizon.payments()
-  // get pub key from db
-  .forAccount(testAccount.b.public)
-  .cursor('now')
+  .cursor("now")
   .stream({
-    onmessage: message => {
+    onmessage: async message => {
       const {amount, to} = message;
-      const asset = message.asset_type === 'native' ? 'XLM' : message.asset_type;
-      const data = {
-        // get email from db
-        email: testAccount.b.email,
-        pubKey: to,
-        amount,
-        asset
-      };
+      const asset = message.asset_type === "native" ? "XLM" : message.asset_type;
+      try {
+        const usersByPublicKey = await User.find()
+          .elemMatch("accounts", {"public": to})
 
-      sendMail(data);
+        if (usersByPublicKey.length > 0) {
+          usersByPublicKey.forEach(user => {
+            const accounts = user._doc.accounts.filter(account => account.public === to);
+            if (accounts.length === 1 && accounts[0].active) {
+              const email = {
+                to: user.email,
+                subject: 'New Stellar Payment!',
+                text: `Hello ${user.username},\n\nThe account:\n${accounts[0].nickname}\n${to}\n\nrecieved ${amount} ${asset}!\n\nSincerely,\n\nStellar Mail`
+              };
+              sendMail(email);
+            }
+          });
+        }
+      } catch (error) {
+        console.log(error);
+      }
     }
   })
-
-
-function sendMail(data) {
-  const mailgunBaseUri = `https://api:${process.env.MAILGUN_API_KEY}@api.mailgun.net/v3/${mailgunDomain}`;
-  const email = {
-    from: 'Stellar Mail <mg@keithunderwood.com>',
-    to: data.email,
-    subject: 'New Stellar Payment!',
-    text: `The account ${data.pubKey} just recieved ${data.amount} ${data.asset}!`
-  };
-
-  const options = {
-    method: 'POST',
-    uri: `${mailgunBaseUri}/messages`,
-    qs: email
-  };
-   
-  rp(options)
-  .then(body => console.log(body))
-  .catch(err => console.log('err:',err))
-};
 
 app.listen(process.env.PORT || 8080, () => console.log(`server running on ${process.env.PORT || 8080}`));
