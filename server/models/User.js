@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const Schema = mongoose.Schema;
 const uniqueValidator = require("mongoose-unique-validator");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
@@ -24,7 +25,9 @@ const UserSchema = new mongoose.Schema(
     },
     isVerified: { type: Boolean, default: false },
     hash: String,
-    salt: String
+    salt: String,
+    settings: {type: Schema.Types.Mixed},
+    accounts: {type: Schema.Types.Mixed}
   },
   { timestamps: true }
 );
@@ -64,6 +67,8 @@ UserSchema.methods.toAuthJSON = function() {
   return {
     username: this.username,
     email: this.email,
+    settings: this.settings,
+    accounts: this.accounts,
     token: this.generateJWT()
   };
 };

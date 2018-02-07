@@ -7,6 +7,40 @@ const auth = require("../auth");
 const EmailVerification = mongoose.model("EmailVerification");
 const sendMail = require("../../services/sendMail");
 
+router.get("/user", auth.required, (req, res, next) => {
+  User.findById(req.payload.id)
+    .then(user => {
+      if (!user) {
+        return res.sendStatus(401);
+      }
+
+      return res.json({ user: user.toAuthJSON() });
+    })
+    .catch(next);
+});
+
+router.put("/user", auth.required, (req, res, next) => {
+  User.findById(req.payload.id)
+    .then(user => {
+      if (!user) {
+        return res.sendStatus(401);
+      }
+
+      // only update fields that were actually passed...
+      if (typeof req.body.user.accounts !== "undefined") {
+        // always expects all accounts
+        const accounts = req.body.user.accounts;
+        user.accounts = accounts;
+      }
+      if (typeof req.body.user.password !== "undefined") {
+        user.setPassword(req.body.user.password);
+      }
+
+      return user.save().then(() => res.json({ user: user.toAuthJSON() }));
+    })
+    .catch(next);
+});
+
 router.post("/users/login", (req, res, next) => {
   if (!req.body.user.email) {
     return res.status(422).json({ errors: { email: `can't be blank` } });
@@ -112,6 +146,8 @@ router.post("/users", (req, res, next) => {
   user.username = req.body.user.username;
   user.email = req.body.user.email;
   user.setPassword(req.body.user.password);
+  user.settings = null;
+  user.accounts = null;
 
   user
     .save()
